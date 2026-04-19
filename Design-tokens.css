@@ -1,0 +1,88 @@
+:root {
+  /* ── Backgrounds ── */
+  --bg:              oklch(0.135 0.012 240);
+  --bg-2:            oklch(0.165 0.012 240);
+  --bg-3:            oklch(0.195 0.013 240);
+  --bg-stage:        #05070c;
+
+  /* ── Borders / lines ── */
+  --line:            oklch(0.27  0.015 240);
+  --line-soft:       oklch(0.22  0.013 240);
+
+  /* ── Text ── */
+  --ink:             oklch(0.86  0.008 240);   /* primary */
+  --ink-dim:         oklch(0.62  0.010 240);   /* secondary */
+  --ink-faint:       oklch(0.44  0.012 240);   /* muted */
+
+  /* ── Accent & status ── */
+  --accent:          oklch(0.78  0.14  72);    /* amber-gold; overridden at runtime to hue 39 */
+  --ok:              oklch(0.78  0.17  150);   /* green */
+  --warn:            oklch(0.72  0.19  40);    /* orange-amber */
+  --bad:             oklch(0.66  0.22  25);    /* red */
+
+  /* ── Flag hues (7 nations + other) ── */
+  --flag-sa:         #4ade80;   /* Saudi Arabia  — green */
+  --flag-ir:         #ef4444;   /* Iran          — red */
+  --flag-ae:         #f59e0b;   /* UAE           — amber */
+  --flag-qa:         #b91c1c;   /* Qatar         — dark-red */
+  --flag-kw:         #22d3ee;   /* Kuwait        — cyan */
+  --flag-iq:         #a78bfa;   /* Iraq          — violet */
+  --flag-om:         #fb923c;   /* Oman          — orange */
+  --flag-ot:         #94a3b8;   /* Other         — slate */
+
+  /* ── Chart series accents ── */
+  --chart-transits:  var(--accent);  /* bar fill — daily transits */
+  --chart-brent:     var(--ok);      /* line stroke — Brent $/bbl */
+
+  /* ── Typography ── */
+  --mono:            'IBM Plex Mono', ui-monospace, Menlo, monospace;
+  --sans:            'Inter', system-ui, sans-serif;
+
+  /* font sizes (5 steps) */
+  --fs-xs:           9px;      /* tick labels, chip sub-labels */
+  --fs-sm:           10px;     /* section headers, status bar */
+  --fs-md:           11px;     /* kv rows, tooltip rows, send btn */
+  --fs-base:         12px;     /* body / default */
+  --fs-lg:           15px;     /* big KV value (.big) */
+
+  /* font weights (3 steps) */
+  --fw-light:        300;
+  --fw-regular:      400;
+  --fw-medium:       500;
+  --fw-semibold:     600;
+
+  /* ── Spacing scale — 4 px base, 8 steps ── */
+  --sp-1:            4px;
+  --sp-2:            8px;
+  --sp-3:            12px;
+  --sp-4:            16px;
+  --sp-5:            20px;
+  --sp-6:            24px;
+  --sp-7:            28px;
+  --sp-8:            32px;
+
+  /* ── Border radius ── */
+  --radius-dot:      50%;      /* status dot, live dot, chat-fab badge */
+  --radius-none:     0px;      /* all panels, chips, handles — sharp/square */
+
+  /* ── Stroke widths ── */
+  --stroke-xs:       1px;      /* panel borders, dashed dividers, tick marks */
+  --stroke-sm:       1.4px;    /* Brent SVG path (stroke-width="1.4") */
+  --stroke-md:       2px;      /* slider selected track, flag bar fill, chart legend swatch */
+
+  /* ── Opacities ── */
+  --opacity-border-subtle:     0.08;   /* inter-country border lines on globe */
+  --opacity-border-coast:      0.18;   /* coastline lines on globe */
+  --opacity-graticule:         0.35;   /* graticule grid lines */
+  --opacity-label:             0.25;   /* country name sprites (rgba 255,255,255,0.25) */
+  --opacity-label-axis:        0.30;   /* x-axis date labels (rgba 255,255,255,0.3) */
+  --opacity-chart-label:       0.70;   /* y-axis value labels (opacity="0.7") */
+  --opacity-bar-normal:        0.75;   /* transit bars — pre-closure */
+  --opacity-bar-post:          0.55;   /* transit bars — post-closure */
+  --opacity-trail:             0.49;   /* vessel trail lines (applied via JS after init) */
+  --opacity-vessel:            0.98;   /* vessel triangle mesh */
+  --opacity-arc:               0.95;   /* clicked full-route arc */
+  --opacity-atmosphere:        0.55;   /* atmosphere rim glow (rim * 0.55 in shader) */
+  --opacity-star:              0.55;   /* starfield points */
+  --opacity-panel-bg:          0.92;   /* info-panel / chart-panel backdrop (color-mix 92%) */
+}

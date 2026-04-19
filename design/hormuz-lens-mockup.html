@@ -1,0 +1,1360 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>hormuz.lens — strait traffic analytics</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
+<style>
+  :root {
+    --bg:          oklch(0.135 0.012 240);
+    --bg-2:        oklch(0.165 0.012 240);
+    --bg-3:        oklch(0.195 0.013 240);
+    --line:        oklch(0.27 0.015 240);
+    --line-soft:   oklch(0.22 0.013 240);
+    --ink:         oklch(0.86 0.008 240);
+    --ink-dim:     oklch(0.62 0.010 240);
+    --ink-faint:   oklch(0.44 0.012 240);
+    --accent:      oklch(0.78 0.14 72);
+    --ok:          oklch(0.78 0.17 150);
+    --warn:        oklch(0.72 0.19 40);
+    --bad:         oklch(0.66 0.22 25);
+
+    --flag-sa: #4ade80;
+    --flag-ir: #ef4444;
+    --flag-ae: #f59e0b;
+    --flag-qa: #b91c1c;
+    --flag-kw: #22d3ee;
+    --flag-iq: #a78bfa;
+    --flag-om: #fb923c;
+    --flag-ot: #94a3b8;
+
+    --mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+    --sans: 'Inter', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; background: var(--bg); color: var(--ink); font-family: var(--mono); font-size: 12px; overflow: hidden; -webkit-font-smoothing: antialiased; }
+
+  #app { position: fixed; inset: 0; display: grid; grid-template-rows: 28px 1fr 64px; }
+
+  .statusbar { display: grid; grid-template-columns: auto 1fr auto; align-items: center; padding: 0 12px; gap: 24px; border-bottom: 1px solid var(--line); background: var(--bg); font-size: 10.5px; letter-spacing: 0.02em; }
+  .statusbar .brand { display: flex; align-items: center; gap: 10px; color: var(--ink); font-weight: 500; }
+  .statusbar .brand .dot { width: 6px; height: 6px; background: var(--ok); border-radius: 50%; box-shadow: 0 0 6px var(--ok); animation: pulse 2.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+  .statusbar .brand b { font-weight: 600; letter-spacing: 0.06em; }
+  .statusbar .brand .sep { color: var(--ink-faint); margin: 0 6px; }
+  .statusbar .brand .sub { color: var(--ink-dim); font-weight: 400; }
+  .statusbar .ticker { display: flex; gap: 18px; color: var(--ink-dim); justify-self: center; }
+  .statusbar .ticker span b { color: var(--ink); font-weight: 500; margin-left: 4px; }
+  .statusbar .ticker .up { color: var(--ok); }
+  .statusbar .ticker .dn { color: var(--bad); }
+  .statusbar .sysmeta { display: flex; gap: 16px; color: var(--ink-faint); }
+  .statusbar .sysmeta b { color: var(--ink-dim); font-weight: 500; }
+
+  .stage { position: relative; overflow: hidden; background: #05070c; }
+  #globe-canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; cursor: grab; }
+  #globe-canvas.grabbing { cursor: grabbing; }
+  #overlay { position: absolute; inset: 0; pointer-events: none; }
+  #overlay svg { width: 100%; height: 100%; }
+
+  /* Reset view button */
+  .reset-btn {
+    position: absolute; top: 16px; right: 336px; z-index: 25;
+    background: color-mix(in oklab, var(--bg-2) 92%, transparent);
+    border: 1px solid var(--line);
+    color: var(--ink-dim); font-family: var(--mono); font-size: 10px;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    padding: 6px 10px; cursor: pointer; backdrop-filter: blur(6px);
+  }
+  .reset-btn:hover { color: var(--ink); border-color: var(--accent); }
+
+  .info-panel { position: absolute; top: 16px; right: 16px; width: 300px; background: color-mix(in oklab, var(--bg-2) 92%, transparent); border: 1px solid var(--line); backdrop-filter: blur(6px); z-index: 20; }
+  .info-panel .hdr { display:flex; justify-content: space-between; align-items:center; padding: 8px 10px; border-bottom: 1px solid var(--line-soft); }
+  .info-panel .hdr .ttl { color: var(--ink-dim); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; }
+  .info-panel .hdr .live { color: var(--ok); font-size: 10px; display:flex; align-items:center; gap:6px; }
+  .info-panel .hdr .live::before { content:''; width: 5px; height: 5px; background: var(--ok); border-radius: 50%; box-shadow: 0 0 5px var(--ok); }
+  .info-panel .kv { display:grid; grid-template-columns: 1fr auto; gap: 6px 10px; padding: 10px; font-size: 11px; }
+  .info-panel .kv dt { color: var(--ink-dim); }
+  .info-panel .kv dd { margin: 0; color: var(--ink); text-align: right; font-variant-numeric: tabular-nums; }
+  .info-panel .kv .big { font-size: 15px; font-weight: 500; }
+  .info-panel .kv .delta-dn { color: var(--bad); }
+  .info-panel .kv .delta-up { color: var(--ok); }
+  .info-panel .flags { padding: 0 10px 10px; }
+  .info-panel .flags .lbl { color: var(--ink-faint); font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase; margin: 8px 0 6px; }
+  .info-panel .flags .row { display:flex; justify-content: space-between; align-items: center; padding: 3px 0; font-size: 11px; border-bottom: 1px dashed var(--line-soft); }
+  .info-panel .flags .row:last-child { border-bottom: 0; }
+  .info-panel .flags .row .l { display:flex; align-items:center; gap: 8px; color: var(--ink); }
+  .info-panel .flags .row .sw { width: 8px; height: 8px; }
+  .info-panel .flags .row .n { color: var(--ink); font-variant-numeric: tabular-nums; }
+  .info-panel .flags .row .bar { height: 2px; background: var(--line-soft); width: 58px; position: relative; margin: 0 8px; flex: 0 0 auto; }
+  .info-panel .flags .row .bar i { position: absolute; left: 0; top: 0; bottom: 0; display: block; }
+
+  .vessel-tip { position: absolute; pointer-events: none; z-index: 40; background: var(--bg); border: 1px solid var(--line); padding: 6px 8px; font-size: 10.5px; min-width: 170px; transform: translate(12px, -50%); opacity: 0; transition: opacity .12s; }
+  .vessel-tip.on { opacity: 1; }
+  .vessel-tip .r { display:flex; justify-content:space-between; gap: 10px; }
+  .vessel-tip .r span:first-child { color: var(--ink-dim); }
+  .vessel-tip .r span:last-child { color: var(--ink); font-variant-numeric: tabular-nums; }
+  .vessel-tip .name { color: var(--ink); font-weight: 500; margin-bottom: 4px; display:flex; align-items:center; gap:6px; }
+  .vessel-tip .name .sw { width: 7px; height: 7px; }
+  .vessel-tip .hint { color: var(--ink-faint); font-size: 9.5px; margin-top: 5px; letter-spacing: 0.08em; text-transform: uppercase; border-top: 1px dashed var(--line-soft); padding-top: 5px; }
+
+  .chart-panel { position: absolute; left: 16px; bottom: 16px; width: 560px; height: 230px; background: color-mix(in oklab, var(--bg-2) 94%, transparent); border: 1px solid var(--line); backdrop-filter: blur(6px); z-index: 25; display: flex; flex-direction: column; transition: height .24s ease, width .24s ease; }
+  .chart-panel.collapsed { height: 30px; width: 220px; }
+  .chart-panel .bar { display:flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-bottom: 1px solid var(--line-soft); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-dim); flex: 0 0 auto; cursor: pointer; user-select: none; }
+  .chart-panel .bar .lg { display:flex; gap: 14px; }
+  .chart-panel .bar .lg span { display:flex; align-items:center; gap:5px; color: var(--ink-dim); }
+  .chart-panel .bar .lg .sw { width: 10px; height: 2px; }
+  .chart-panel .bar .caret { color: var(--ink-faint); font-family: var(--mono); }
+  .chart-panel .body { flex: 1; position: relative; overflow: hidden; }
+  .chart-panel.collapsed .body { display: none; }
+  .chart-panel .body svg { width: 100%; height: 100%; display: block; }
+
+  .drawer { position: absolute; top: 0; right: 0; height: 100%; width: 380px; background: var(--bg-2); border-left: 1px solid var(--line); z-index: 30; display: flex; flex-direction: column; transform: translateX(100%); transition: transform .26s ease; }
+  .drawer.open { transform: translateX(0); }
+  .drawer .dhdr { display:flex; justify-content:space-between; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  .drawer .dhdr .ttl { font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-dim); display:flex; align-items:center; gap: 8px; }
+  .drawer .dhdr .ttl::before { content:''; width:5px; height:5px; background: var(--accent); border-radius: 50%; box-shadow: 0 0 6px var(--accent); }
+  .drawer .dhdr .x { cursor: pointer; color: var(--ink-dim); font-family: var(--mono); padding: 2px 6px; }
+  .drawer .dhdr .x:hover { color: var(--ink); background: var(--bg-3); }
+  .drawer .groundings { padding: 10px 12px; border-bottom: 1px solid var(--line-soft); font-size: 10px; color: var(--ink-faint); }
+  .drawer .groundings b { color: var(--ink-dim); font-weight: 500; letter-spacing: 0.1em; display:block; margin-bottom: 4px; text-transform: uppercase; }
+  .drawer .groundings .chip { display: inline-block; padding: 2px 7px; margin: 2px 3px 2px 0; border: 1px solid var(--line); color: var(--ink-dim); }
+  .drawer .groundings .chip b { display: inline; color: var(--ink); letter-spacing: 0; text-transform: none; font-weight: 500; margin: 0; }
+  .drawer .msgs { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 14px; }
+  .drawer .msg { font-size: 12px; line-height: 1.55; }
+  .drawer .msg .who { font-size: 9.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 4px; }
+  .drawer .msg.user .who { color: var(--accent); }
+  .drawer .msg.asst .who { color: var(--ok); }
+  .drawer .msg .body { color: var(--ink); }
+  .drawer .msg .body .num { color: var(--ink); background: var(--bg-3); padding: 1px 5px; border: 1px solid var(--line-soft); }
+  .drawer .msg .cites { margin-top: 6px; display:flex; gap: 6px; flex-wrap: wrap; }
+  .drawer .msg .cites a { font-size: 9.5px; color: var(--ink-dim); border: 1px solid var(--line); padding: 1px 5px; text-decoration: none; }
+  .drawer .compose { border-top: 1px solid var(--line); padding: 10px 12px; }
+  .drawer .compose .sugs { display:flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+  .drawer .compose .sugs button { font-family: var(--mono); font-size: 10px; background: transparent; color: var(--ink-dim); border: 1px solid var(--line); padding: 3px 7px; cursor: pointer; }
+  .drawer .compose .sugs button:hover { color: var(--ink); border-color: var(--ink-dim); }
+  .drawer .compose .input-row { display:flex; gap: 8px; align-items: center; border: 1px solid var(--line); background: var(--bg); padding: 2px 2px 2px 10px; }
+  .drawer .compose input { flex: 1; background: transparent; border: 0; color: var(--ink); font-family: var(--mono); font-size: 12px; outline: none; padding: 8px 0; }
+  .drawer .compose input::placeholder { color: var(--ink-faint); }
+  .drawer .compose button.send { background: var(--bg-3); border: 1px solid var(--line); color: var(--ink-dim); padding: 6px 10px; font-family: var(--mono); font-size: 11px; cursor: pointer; letter-spacing: 0.05em; }
+
+  .chat-fab { position: absolute; right: 16px; bottom: 80px; z-index: 29; width: 44px; height: 44px; background: var(--bg-2); border: 1px solid var(--line); display:flex; align-items:center; justify-content:center; color: var(--ink-dim); cursor: pointer; font-family: var(--mono); font-size: 11px; }
+  .chat-fab:hover { color: var(--ink); border-color: var(--accent); }
+  .chat-fab::before { content:''; position: absolute; top: 5px; right: 5px; width: 5px; height: 5px; background: var(--accent); border-radius: 50%; box-shadow: 0 0 5px var(--accent); }
+
+  .dock { background: var(--bg); border-top: 1px solid var(--line); display: grid; grid-template-columns: 340px 1fr 280px; align-items: center; gap: 20px; padding: 0 16px; }
+  .dock .range-label { color: var(--ink-dim); font-size: 10.5px; letter-spacing: 0.1em; }
+  .dock .range-label b { color: var(--ink); font-weight: 500; letter-spacing: 0; font-variant-numeric: tabular-nums; }
+  .dock .range-label .arrow { color: var(--ink-faint); margin: 0 8px; }
+  .dock .range-label .days { color: var(--ink-faint); margin-left: 10px; }
+  .dock .slider { position: relative; height: 36px; }
+  .dock .slider .track-bg { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); height: 1px; background: var(--line); }
+  .dock .slider .tick-layer { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); height: 8px; }
+  .dock .slider .tick { position: absolute; top: 50%; transform: translate(-50%, -50%); width: 1px; height: 4px; background: var(--line); }
+  .dock .slider .tick.month { height: 8px; background: var(--line-soft); }
+  .dock .slider .tick-label { position: absolute; top: 22px; transform: translateX(-50%); color: var(--ink-faint); font-size: 9px; letter-spacing: 0.08em; }
+  .dock .slider .selected { position: absolute; top: 50%; transform: translateY(-50%); height: 2px; background: var(--accent); box-shadow: 0 0 6px color-mix(in oklab, var(--accent) 50%, transparent); }
+  .dock .slider .annot { position: absolute; top: 6px; bottom: 6px; border-left: 1px dashed var(--bad); }
+  .dock .slider .annot .lbl { position: absolute; top: -4px; left: 4px; color: var(--bad); font-size: 9px; white-space: nowrap; letter-spacing: 0.06em; }
+  .dock .slider .handle { position: absolute; top: 50%; transform: translate(-50%, -50%); width: 10px; height: 14px; background: var(--bg); border: 1px solid var(--accent); cursor: ew-resize; }
+  .dock .slider .handle::after { content:''; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 2px; height: 6px; background: var(--accent); }
+  .dock .chips { display:flex; gap: 4px; justify-self: end; align-items: center; }
+  .dock .chips .chip { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.06em; background: transparent; border: 1px solid var(--line); color: var(--ink-dim); padding: 5px 10px; cursor: pointer; }
+  .dock .chips .chip.active { color: var(--bg); background: var(--accent); border-color: var(--accent); }
+  .dock .chips .chip:hover:not(.active) { color: var(--ink); border-color: var(--ink-dim); }
+
+  /* loader */
+  .loader { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); color: var(--ink-dim); font-size: 10px; letter-spacing: 0.2em; z-index: 10; }
+  .loader::before { content:''; display: inline-block; width: 6px; height: 6px; background: var(--accent); margin-right: 8px; animation: blink 1s steps(2) infinite; vertical-align: middle; }
+  @keyframes blink { 50% { opacity: 0.1; } }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-thumb { background: var(--line); }
+  ::-webkit-scrollbar-track { background: transparent; }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div class="statusbar">
+    <div class="brand">
+      <span class="dot"></span>
+      <span><b>HORMUZ</b>.LENS</span>
+      <span class="sep">/</span>
+      <span class="sub">strait traffic analytics · v0.4-alpha</span>
+    </div>
+    <div class="ticker">
+      <span>BRENT<b id="t-brent">$87.42</b> <b class="up">+2.14%</b></span>
+      <span>WTI<b>$83.91</b> <b class="up">+1.88%</b></span>
+      <span>VLCC·AG→CHN<b>WS 68.5</b> <b class="dn">−0.3</b></span>
+      <span>TRANSITS/24H<b id="t-trx">142</b></span>
+    </div>
+    <div class="sysmeta">
+      <span>AIS <b>LIVE</b></span>
+      <span>UTC <b id="t-utc">—</b></span>
+      <span>LAT 26.5°N · LON 56.3°E</span>
+    </div>
+  </div>
+
+  <div class="stage">
+    <canvas id="globe-canvas"></canvas>
+    <div id="overlay"><svg id="ovl-svg"></svg></div>
+    <div class="loader" id="loader">LOADING WORLD GEOMETRY</div>
+
+    <button class="reset-btn" id="reset-btn">◎ RESET VIEW</button>
+
+    <div class="info-panel" id="info-panel">
+      <div class="hdr">
+        <span class="ttl">Strait of Hormuz · Realtime</span>
+        <span class="live">LIVE</span>
+      </div>
+      <dl class="kv">
+        <dt>Active vessels</dt>
+        <dd class="big" id="k-active">—</dd>
+        <dt>Transits · last 24h</dt>
+        <dd><span id="k-tx">142</span> <span class="delta-dn">−18.2%</span></dd>
+        <dt>Avg daily throughput (30d)</dt>
+        <dd>163 <span class="delta-dn">−24.0%</span></dd>
+        <dt>Crude cargo outbound</dt>
+        <dd>17.2 Mb/d</dd>
+        <dt>Closure status</dt>
+        <dd style="color: var(--bad);">PARTIAL · since 28 Feb</dd>
+      </dl>
+      <div class="flags">
+        <div class="lbl">Flag mix · selected range</div>
+        <div id="flag-list"></div>
+      </div>
+    </div>
+
+    <div class="chat-fab" id="chat-fab" title="Open analyst">▸</div>
+    <div class="drawer" id="drawer">
+      <div class="dhdr">
+        <span class="ttl">Grounded analyst · hormuz-gpt</span>
+        <span class="x" id="drawer-close">×</span>
+      </div>
+      <div class="groundings">
+        <b>Context window</b>
+        <span class="chip">range: <b id="g-range">Jan 1 → Apr 19</b></span>
+        <span class="chip">flags: <b>all</b></span>
+        <span class="chip">sources: <b>AIS + EIA + Kpler</b></span>
+      </div>
+      <div class="msgs" id="msgs">
+        <div class="msg asst">
+          <div class="who">hormuz-gpt</div>
+          <div class="body">Grounded on the AIS feed, EIA crude flows, and Kpler manifests for your current range. Ask about <i>transit volume, flag mix, cargo composition</i>, or the <i>28 Feb closure</i>.</div>
+        </div>
+        <div class="msg user">
+          <div class="who">analyst</div>
+          <div class="body">why is iranian tonnage up 38% since the closure?</div>
+        </div>
+        <div class="msg asst">
+          <div class="who">hormuz-gpt</div>
+          <div class="body">Three signals. <b>First</b>, NITC vessels formerly STS at Kharg increased direct transits — <span class="num">+41 voyages</span> vs. baseline. <b>Second</b>, mean draft rose from <span class="num">16.8m</span> to <span class="num">19.2m</span>. <b>Third</b>, Basra-routed VLCCs dropped <span class="num">−62%</span>, suggesting substitution.
+            <div class="cites"><a>AIS · NITC-fleet</a><a>Kpler · IR-crude</a><a>EIA · STEO</a></div>
+          </div>
+        </div>
+      </div>
+      <div class="compose">
+        <div class="sugs">
+          <button>flag breakdown last 7d</button>
+          <button>compare to 2024 closure</button>
+          <button>vessels &gt; 300kdwt</button>
+        </div>
+        <div class="input-row">
+          <input placeholder="ask about vessels, flags, cargo, closure…" />
+          <button class="send">SEND ↵</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="chart-panel" id="chart-panel">
+      <div class="bar" id="chart-bar">
+        <div class="lg">
+          <span><i class="sw" style="background: var(--accent);"></i>Daily transits</span>
+          <span><i class="sw" style="background: var(--ok);"></i>Brent close · $/bbl</span>
+        </div>
+        <div class="caret" id="chart-caret">▾ COLLAPSE</div>
+      </div>
+      <div class="body" id="chart-body"></div>
+    </div>
+
+    <div class="vessel-tip" id="vessel-tip"></div>
+  </div>
+
+  <div class="dock">
+    <div class="range-label">
+      RANGE <b id="r-from">JAN 01 2026</b><span class="arrow">→</span><b id="r-to">APR 19 2026</b><span class="days" id="r-days">· 109 d</span>
+    </div>
+    <div class="slider" id="slider">
+      <div class="track-bg"></div>
+      <div class="tick-layer" id="ticks"></div>
+      <div class="selected" id="sel"></div>
+      <div class="annot" id="annot"><span class="lbl">28 FEB · CLOSURE</span></div>
+      <div class="handle" id="h-from" data-h="from"></div>
+      <div class="handle" id="h-to"   data-h="to"></div>
+    </div>
+    <div class="chips">
+      <button class="chip" data-chip="7">7D</button>
+      <button class="chip" data-chip="30">30D</button>
+      <button class="chip active" data-chip="ytd">YTD</button>
+      <button class="chip" data-chip="custom">CUSTOM</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===========================================================
+   hormuz.lens — Three.js globe + bound chart
+   =========================================================== */
+
+/* ---------- Deterministic PRNG ---------- */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+
+/* ---------- Flags ---------- */
+const FLAGS = [
+  { id:'SA', name:'Saudi Arabia', color:0x4ade80, css:'--flag-sa' },
+  { id:'IR', name:'Iran',         color:0xef4444, css:'--flag-ir' },
+  { id:'AE', name:'UAE',          color:0xf59e0b, css:'--flag-ae' },
+  { id:'QA', name:'Qatar',        color:0xb91c1c, css:'--flag-qa' },
+  { id:'KW', name:'Kuwait',       color:0x22d3ee, css:'--flag-kw' },
+  { id:'IQ', name:'Iraq',         color:0xa78bfa, css:'--flag-iq' },
+  { id:'OM', name:'Oman',         color:0xfb923c, css:'--flag-om' },
+  { id:'OT', name:'Other',        color:0x94a3b8, css:'--flag-ot' },
+];
+const flagById = Object.fromEntries(FLAGS.map(f=>[f.id,f]));
+function cssVar(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+/* ---------- Ports (deterministic vessel origins/destinations) ---------- */
+const PORTS = [
+  { id:'RASTANURA',   name:'Ras Tanura',    lat:26.65, lon:50.17, flag:'SA' },
+  { id:'JUAYMAH',     name:'Ju\'aymah',     lat:26.88, lon:49.97, flag:'SA' },
+  { id:'KHARG',       name:'Kharg Island',  lat:29.25, lon:50.32, flag:'IR' },
+  { id:'BANDAR',      name:'Bandar Abbas',  lat:27.15, lon:56.21, flag:'IR' },
+  { id:'FUJAIRAH',    name:'Fujairah',      lat:25.12, lon:56.37, flag:'AE' },
+  { id:'JEBELALI',    name:'Jebel Ali',     lat:24.99, lon:55.06, flag:'AE' },
+  { id:'RASLAFFAN',   name:'Ras Laffan',    lat:25.90, lon:51.57, flag:'QA' },
+  { id:'MINAALAHMADI',name:'Mina Al Ahmadi',lat:29.07, lon:48.15, flag:'KW' },
+  { id:'BASRA',       name:'Basra Oil Term',lat:29.68, lon:48.80, flag:'IQ' },
+  { id:'SOHAR',       name:'Sohar',         lat:24.48, lon:56.62, flag:'OM' },
+  { id:'SIKKA',       name:'Sikka (IN)',    lat:22.47, lon:69.84, flag:'OT' },
+  { id:'NINGBO',      name:'Ningbo (CN)',   lat:29.87, lon:121.55,flag:'OT' },
+  { id:'YEOSU',       name:'Yeosu (KR)',    lat:34.74, lon:127.74,flag:'OT' },
+  { id:'ROTTERDAM',   name:'Rotterdam (NL)',lat:51.95, lon: 4.13, flag:'OT' },
+  { id:'SINGAPORE',   name:'Singapore',     lat: 1.27, lon:103.80,flag:'OT' },
+  { id:'YOKOHAMA',    name:'Yokohama (JP)', lat:35.44, lon:139.64,flag:'OT' },
+  { id:'HOUSTON',     name:'Houston (US)',  lat:29.74, lon:-95.00,flag:'OT' },
+];
+const portById = Object.fromEntries(PORTS.map(p=>[p.id,p]));
+
+
+
+/* ---------- Globe state ---------- */
+const GLOBE = {
+  radius: 1,
+  canvas: null, renderer: null, scene: null, camera: null,
+  earth: null, borders: null, atmosphere: null,
+  trailGroup: null, vesselGroup: null, arcGroup: null,
+  rot: { x: 0, y: 0 },          // yaw around y, pitch around x
+  rotVel: { x: 0, y: 0 },
+  camDist: 1.9,                  // world units from center
+  camDistTarget: 1.9,
+  raycaster: null, mouse: null,
+  vessels: [],                   // {mesh, flag, name, ...}
+  trails: [],
+  // defaults: framing on Hormuz (strait close-up between Persian Gulf and Gulf of Oman)
+  DEFAULT: { rotX: -(-25.16) * Math.PI/180, rotY: (-147.11) * Math.PI/180, dist: 2.00 },
+  FAR:     { dist: 3.6 },
+  animTarget: null, animStart: null, animT0: 0, animDur: 900,
+};
+
+/* ---------- Lat/lon to 3D ---------- */
+function latlonToVec3(lat, lon, r){
+  const phi = (90 - lat) * Math.PI/180;
+  const theta = (lon + 180) * Math.PI/180;
+  const x = -r * Math.sin(phi) * Math.cos(theta);
+  const z =  r * Math.sin(phi) * Math.sin(theta);
+  const y =  r * Math.cos(phi);
+  return new THREE.Vector3(x, y, z);
+}
+
+/* ---------- Build globe ---------- */
+async function initGlobe(){
+  const canvas = document.getElementById('globe-canvas');
+  GLOBE.canvas = canvas;
+  const W = canvas.clientWidth, H = canvas.clientHeight;
+
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setSize(W, H, false);
+  renderer.setClearColor(0x05070c, 1);
+  GLOBE.renderer = renderer;
+
+  const scene = new THREE.Scene();
+  GLOBE.scene = scene;
+
+  // World root — everything rotatable lives under this
+  const wr = new THREE.Group();
+  scene.add(wr);
+  worldRoot = wr;
+
+  const cam = new THREE.PerspectiveCamera(35, W/H, 0.01, 100);
+  cam.position.set(0, 0, GLOBE.camDist);
+  GLOBE.camera = cam;
+
+  // Earth sphere — very dark, slightly blue
+  const earthGeo = new THREE.SphereGeometry(GLOBE.radius, 96, 96);
+  const earthMat = new THREE.MeshBasicMaterial({ color: 0x0c1422 });
+  const earth = new THREE.Mesh(earthGeo, earthMat);
+  wr.add(earth);
+  GLOBE.earth = earth;
+
+  // Subtle inner graticule — use thin lines on a slightly bigger sphere
+  const gratGroup = new THREE.Group();
+  const gratMat = new THREE.LineBasicMaterial({ color: 0x1a2636, transparent: true, opacity: 0.35 });
+  for (let lat=-80; lat<=80; lat+=15){
+    const pts = [];
+    for (let lon=-180; lon<=180; lon+=3){
+      pts.push(latlonToVec3(lat, lon, GLOBE.radius*1.0005));
+    }
+    gratGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), gratMat));
+  }
+  for (let lon=-180; lon<180; lon+=15){
+    const pts = [];
+    for (let lat=-89; lat<=89; lat+=3){
+      pts.push(latlonToVec3(lat, lon, GLOBE.radius*1.0005));
+    }
+    gratGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), gratMat));
+  }
+  wr.add(gratGroup);
+
+  // Atmosphere glow — back-side sphere with additive shader
+  const atmoGeo = new THREE.SphereGeometry(GLOBE.radius*1.06, 64, 64);
+  const atmoMat = new THREE.ShaderMaterial({
+    uniforms: {},
+    vertexShader: `
+      varying vec3 vNormal; varying vec3 vPos;
+      void main(){
+        vNormal = normalize(normalMatrix * normal);
+        vPos = (modelViewMatrix * vec4(position,1.0)).xyz;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);
+      }`,
+    fragmentShader: `
+      varying vec3 vNormal; varying vec3 vPos;
+      void main(){
+        vec3 viewDir = normalize(-vPos);
+        float rim = 1.0 - max(dot(viewDir, vNormal), 0.0);
+        rim = pow(rim, 2.8);
+        gl_FragColor = vec4(0.28, 0.48, 0.78, rim * 0.55);
+      }`,
+    side: THREE.BackSide, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+  });
+  const atmo = new THREE.Mesh(atmoGeo, atmoMat);
+  wr.add(atmo);
+  GLOBE.atmosphere = atmo;
+
+  // Starfield
+  const starGeo = new THREE.BufferGeometry();
+  const starRnd = mulberry32(42);
+  const starPts = [];
+  for (let i=0; i<1200; i++){
+    const u = starRnd(), v = starRnd();
+    const theta = 2*Math.PI*u, phi = Math.acos(2*v-1);
+    const r = 40 + starRnd()*20;
+    starPts.push(r*Math.sin(phi)*Math.cos(theta), r*Math.cos(phi), r*Math.sin(phi)*Math.sin(theta));
+  }
+  starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPts, 3));
+  const starMat = new THREE.PointsMaterial({ color: 0x7a90b0, size: 0.06, sizeAttenuation: true, transparent: true, opacity: 0.55 });
+  scene.add(new THREE.Points(starGeo, starMat));  // stars stay in scene, not rotated
+
+  // Country fills + borders groups — filled once world-atlas loads
+  const fillsGroup = new THREE.Group();
+  const bordersGroup = new THREE.Group();
+  wr.add(fillsGroup);
+  wr.add(bordersGroup);
+  GLOBE.fills = fillsGroup;
+  GLOBE.borders = bordersGroup;
+
+  // Trails + vessels + arcs groups
+  GLOBE.trailGroup = new THREE.Group(); wr.add(GLOBE.trailGroup);
+  GLOBE.arcGroup   = new THREE.Group(); wr.add(GLOBE.arcGroup);
+  GLOBE.vesselGroup= new THREE.Group(); wr.add(GLOBE.vesselGroup);
+
+  GLOBE.raycaster = new THREE.Raycaster();
+  GLOBE.mouse = new THREE.Vector2();
+
+  // Set default camera framing
+  GLOBE.rot.x = GLOBE.DEFAULT.rotX;
+  GLOBE.rot.y = GLOBE.DEFAULT.rotY;
+  GLOBE.camDist = GLOBE.DEFAULT.dist;
+  GLOBE.camDistTarget = GLOBE.DEFAULT.dist;
+
+  // Load world atlas
+  await loadWorld(fillsGroup, bordersGroup);
+  document.getElementById('loader').style.display = 'none';
+
+  // Generate traffic
+  generateTraffic();
+
+  // Bind interactions
+  bindGlobeInteractions();
+
+  window.addEventListener('resize', ()=>{
+    const W = canvas.clientWidth, H = canvas.clientHeight;
+    renderer.setSize(W, H, false);
+    cam.aspect = W/H; cam.updateProjectionMatrix();
+  });
+
+  animate();
+}
+
+async function loadWorld(fillsGroup, bordersGroup){
+  try {
+    const res = await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json');
+    const topo = await res.json();
+    const geo = topojson.feature(topo, topo.objects.countries);
+    const mesh = topojson.mesh(topo, topo.objects.countries, (a,b)=>a!==b);      // inter-country borders
+    const coast = topojson.mesh(topo, topo.objects.countries, (a,b)=>a===b);     // coastlines
+
+    // Uniform warm-slate land color
+    const LAND_COLOR = 0x2e2822;
+    geo.features.forEach(f=>{
+      const meshes = featureToFillMeshes(f, LAND_COLOR);
+      meshes.forEach(m => fillsGroup.add(m));
+    });
+
+    // --- Borders (inter-country) — hairline, very low opacity ---
+    addMeshLines(bordersGroup, mesh, 0xffffff, 0.08);
+    // --- Coastlines (country vs ocean) — slightly stronger ---
+    addMeshLines(bordersGroup, coast, 0xffffff, 0.18);
+
+    // Country labels disabled
+    // addCountryLabels(geo, bordersGroup);
+  } catch(e){
+    console.error('world-atlas load failed', e);
+  }
+}
+
+/* Country name labels — CanvasTexture sprites attached to sphere at centroid.
+   Size scales with bbox area; hidden for very small polygons. */
+function addCountryLabels(geo, group){
+  // Only a curated set to avoid clutter; key = ISO numeric id from world-atlas
+  const NAMES = {
+    '840':'UNITED STATES','124':'CANADA','484':'MEXICO','076':'BRAZIL','032':'ARGENTINA','152':'CHILE','604':'PERU','170':'COLOMBIA','862':'VENEZUELA',
+    '826':'UK','250':'FRANCE','276':'GERMANY','724':'SPAIN','380':'ITALY','616':'POLAND','643':'RUSSIA','792':'TURKEY','804':'UKRAINE','752':'SWEDEN','578':'NORWAY','246':'FINLAND',
+    '012':'ALGERIA','434':'LIBYA','818':'EGYPT','729':'SUDAN','231':'ETHIOPIA','404':'KENYA','710':'SOUTH AFRICA','566':'NIGERIA','180':'DRC','508':'MOZAMBIQUE','706':'SOMALIA',
+    '682':'SAUDI ARABIA','364':'IRAN','368':'IRAQ','784':'UAE','634':'QATAR','414':'KUWAIT','512':'OMAN','887':'YEMEN','760':'SYRIA','400':'JORDAN','422':'LEBANON','376':'ISRAEL',
+    '356':'INDIA','586':'PAKISTAN','004':'AFGHANISTAN','050':'BANGLADESH','524':'NEPAL','144':'SRI LANKA',
+    '156':'CHINA','392':'JAPAN','410':'SOUTH KOREA','408':'NORTH KOREA','496':'MONGOLIA','704':'VIETNAM','764':'THAILAND','458':'MALAYSIA','360':'INDONESIA','608':'PHILIPPINES','104':'MYANMAR',
+    '036':'AUSTRALIA','554':'NEW ZEALAND',
+    '398':'KAZAKHSTAN','860':'UZBEKISTAN','795':'TURKMENISTAN'
+  };
+
+  function bbox(coords){
+    let minLon=180,maxLon=-180,minLat=90,maxLat=-90;
+    coords.forEach(([lon,lat])=>{ if(lon<minLon)minLon=lon; if(lon>maxLon)maxLon=lon; if(lat<minLat)minLat=lat; if(lat>maxLat)maxLat=lat;});
+    return {minLon,maxLon,minLat,maxLat,w:maxLon-minLon,h:maxLat-minLat,cx:(minLon+maxLon)/2,cy:(minLat+maxLat)/2};
+  }
+
+  function makeLabelSprite(text, scale){
+    const pad = 8;
+    const fontPx = 64; // high-res canvas, downscale via sprite size
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    ctx.font = `500 ${fontPx}px "IBM Plex Mono", monospace`;
+    const tw = Math.ceil(ctx.measureText(text).width);
+    canvas.width = tw + pad*2;
+    canvas.height = fontPx + pad*2;
+    const ctx2 = canvas.getContext('2d');
+    ctx2.font = `500 ${fontPx}px "IBM Plex Mono", monospace`;
+    ctx2.textBaseline = 'middle';
+    ctx2.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx2.fillText(text, pad, canvas.height/2);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.minFilter = THREE.LinearFilter;
+    tex.anisotropy = 4;
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: true, depthWrite: false });
+    const sp = new THREE.Sprite(mat);
+    // sprite world size — scale matches polygon extent
+    const aspect = canvas.width / canvas.height;
+    sp.scale.set(scale * aspect, scale, 1);
+    return sp;
+  }
+
+  geo.features.forEach(f => {
+    const id = String(f.id).padStart(3,'0');
+    const name = NAMES[id];
+    if (!name) return;
+    // collect all coords to compute bbox
+    const allCoords = [];
+    const geom = f.geometry;
+    const polys = geom.type === 'Polygon' ? [geom.coordinates] : geom.coordinates;
+    polys.forEach(poly => poly[0].forEach(pt => allCoords.push(pt)));
+    if (!allCoords.length) return;
+    const bb = bbox(allCoords);
+    // area proxy = bbox w * h (in degrees)
+    const areaProxy = bb.w * bb.h;
+    if (areaProxy < 6) return; // skip tiny
+    // map area → sprite world scale (sphere radius ≈ 1)
+    const s = Math.min(0.075, Math.max(0.022, Math.sqrt(areaProxy) * 0.0048));
+    const sp = makeLabelSprite(name, s);
+    const pos = latlonToVec3(bb.cy, bb.cx, GLOBE.radius * 1.012);
+    sp.position.copy(pos);
+    group.add(sp);
+  });
+}
+
+/* Convert TopoJSON linestring/multilinestring feature → Three.js line segments on sphere */
+function addMeshLines(group, feature, colorHex, opacity){
+  const mat = new THREE.LineBasicMaterial({ color: colorHex, transparent: true, opacity });
+  const coords = feature.type === 'MultiLineString' ? feature.coordinates : [feature.coordinates];
+  coords.forEach(line => {
+    const pts = [];
+    for (let i=0; i<line.length; i++){
+      const [lon, lat] = line[i];
+      pts.push(latlonToVec3(lat, lon, GLOBE.radius*1.001));
+    }
+    if (pts.length >= 2){
+      group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), mat));
+    }
+  });
+}
+
+/* Convert polygon/multipolygon country feature → filled meshes (triangulated as sphere-approx triangles) */
+function featureToFillMeshes(feature, colorHex){
+  const polys = feature.geometry.type === 'Polygon' ? [feature.geometry.coordinates] : feature.geometry.coordinates;
+  const meshes = [];
+  const mat = new THREE.MeshBasicMaterial({ color: colorHex, transparent: false, opacity: 1.0, side: THREE.DoubleSide, depthWrite: false });
+  polys.forEach(poly => {
+    const outer = poly[0];
+    if (!outer || outer.length < 3) return;
+    // Earcut-triangulate the 2D outer ring, then project each vertex to sphere
+    const flat = [];
+    outer.forEach(([lon,lat]) => { flat.push(lon, lat); });
+    const tri = earcut(flat);
+    const positions = new Float32Array(outer.length * 3);
+    for (let i=0; i<outer.length; i++){
+      const [lon, lat] = outer[i];
+      const v = latlonToVec3(lat, lon, GLOBE.radius*1.0006);
+      positions[i*3] = v.x; positions[i*3+1] = v.y; positions[i*3+2] = v.z;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geo.setIndex(tri);
+    meshes.push(new THREE.Mesh(geo, mat));
+  });
+  return meshes;
+}
+
+/* ---------- Minimal earcut implementation ----------
+   (Basic ear-clipping for simple polygons; world-atlas 110m outer rings are simple enough) */
+function earcut(coords){
+  const n = coords.length/2;
+  const indices = [];
+  const V = [];
+  for (let i=0;i<n;i++) V.push(i);
+  const pt = i => [coords[i*2], coords[i*2+1]];
+  const sign = (a,b,c)=> (b[0]-a[0])*(c[1]-a[1]) - (b[1]-a[1])*(c[0]-a[0]);
+  // determine winding
+  let area = 0;
+  for (let i=0;i<n;i++){
+    const [x1,y1]=pt(i), [x2,y2]=pt((i+1)%n);
+    area += (x2-x1)*(y2+y1);
+  }
+  const ccw = area < 0;
+  let guard = 0;
+  while (V.length > 3 && guard++ < 20000){
+    let eared = false;
+    for (let k=0;k<V.length;k++){
+      const i0 = V[(k-1+V.length)%V.length];
+      const i1 = V[k];
+      const i2 = V[(k+1)%V.length];
+      const a = pt(i0), b = pt(i1), c = pt(i2);
+      const s = sign(a,b,c);
+      if ((ccw && s > 0) || (!ccw && s < 0)){
+        // convex; check no other vertex inside triangle abc
+        let ok = true;
+        for (let j=0;j<V.length;j++){
+          const jj = V[j]; if (jj===i0||jj===i1||jj===i2) continue;
+          const p = pt(jj);
+          if (pointInTri(p,a,b,c)) { ok=false; break; }
+        }
+        if (ok){
+          indices.push(i0, i1, i2);
+          V.splice(k,1);
+          eared = true;
+          break;
+        }
+      }
+    }
+    if (!eared) break; // degenerate — give up, partial fill
+  }
+  if (V.length === 3) indices.push(V[0], V[1], V[2]);
+  return indices;
+}
+function pointInTri(p,a,b,c){
+  const d1 = (p[0]-b[0])*(a[1]-b[1])-(a[0]-b[0])*(p[1]-b[1]);
+  const d2 = (p[0]-c[0])*(b[1]-c[1])-(b[0]-c[0])*(p[1]-c[1]);
+  const d3 = (p[0]-a[0])*(c[1]-a[1])-(c[0]-a[0])*(p[1]-a[1]);
+  const hasNeg = (d1<0)||(d2<0)||(d3<0);
+  const hasPos = (d1>0)||(d2>0)||(d3>0);
+  return !(hasNeg && hasPos);
+}
+
+/* ---------- Camera/rotation: we rotate the scene root, not the camera ---------- */
+// We'll apply rotation to a world group
+let worldRoot;
+function ensureWorldRoot(){ /* no-op: worldRoot created in initGlobe */ }
+
+/* ---------- Trails + vessels ---------- */
+function greatCircleArc(from, to, segments, liftMax){
+  // interpolate along great circle, lifting middle segment slightly above surface
+  const a = latlonToVec3(from.lat, from.lon, GLOBE.radius).normalize();
+  const b = latlonToVec3(to.lat,   to.lon,   GLOBE.radius).normalize();
+  const omega = Math.acos(Math.min(1, Math.max(-1, a.dot(b))));
+  const sinOmega = Math.sin(omega) || 1;
+  const pts = [];
+  for (let i=0;i<=segments;i++){
+    const t = i/segments;
+    const k0 = Math.sin((1-t)*omega)/sinOmega;
+    const k1 = Math.sin(t*omega)/sinOmega;
+    const v = new THREE.Vector3(a.x*k0+b.x*k1, a.y*k0+b.y*k1, a.z*k0+b.z*k1);
+    // lift by sin(pi*t) * liftMax
+    const lift = 1 + Math.sin(Math.PI*t) * liftMax;
+    v.normalize().multiplyScalar(GLOBE.radius * lift);
+    pts.push(v);
+  }
+  return pts;
+}
+
+function generateTraffic(){
+  const rnd = mulberry32(20260219);
+  // clear
+  [GLOBE.trailGroup, GLOBE.vesselGroup, GLOBE.arcGroup].forEach(g=>{
+    while (g.children.length) g.remove(g.children[0]);
+  });
+  GLOBE.vessels = [];
+  GLOBE.trails = [];
+
+  // Every vessel: origin port → destination port, deterministic
+  // Route short trails through Hormuz chokepoint waypoint
+  const CHOKE = { lat: 26.57, lon: 56.25 };
+
+  // 32 vessels
+  const lanes = [];
+  // Short trails (visible at default framing) — intra-Gulf + near-Hormuz
+  lanes.push(
+    {o:'RASTANURA', d:'FUJAIRAH',  flag:'SA'},
+    {o:'JUAYMAH',   d:'FUJAIRAH',  flag:'SA'},
+    {o:'RASTANURA', d:'FUJAIRAH',  flag:'SA'},
+    {o:'KHARG',     d:'BANDAR',    flag:'IR'},
+    {o:'KHARG',     d:'SOHAR',     flag:'IR'},
+    {o:'BANDAR',    d:'FUJAIRAH',  flag:'IR'},
+    {o:'JEBELALI',  d:'FUJAIRAH',  flag:'AE'},
+    {o:'JEBELALI',  d:'SOHAR',     flag:'AE'},
+    {o:'RASLAFFAN', d:'FUJAIRAH',  flag:'QA'},
+    {o:'RASLAFFAN', d:'SOHAR',     flag:'QA'},
+    {o:'MINAALAHMADI',d:'FUJAIRAH',flag:'KW'},
+    {o:'BASRA',     d:'FUJAIRAH',  flag:'IQ'},
+    {o:'SOHAR',     d:'BANDAR',    flag:'OM'},
+  );
+  // Long-haul arcs (visible when pulled back)
+  lanes.push(
+    {o:'RASTANURA',d:'NINGBO',   flag:'SA'},
+    {o:'JUAYMAH',  d:'SINGAPORE',flag:'SA'},
+    {o:'RASLAFFAN',d:'YOKOHAMA', flag:'QA'},
+    {o:'KHARG',    d:'NINGBO',   flag:'IR'},
+    {o:'KHARG',    d:'SIKKA',    flag:'IR'},
+    {o:'BASRA',    d:'ROTTERDAM',flag:'IQ'},
+    {o:'MINAALAHMADI',d:'YEOSU', flag:'KW'},
+    {o:'FUJAIRAH', d:'ROTTERDAM',flag:'AE'},
+    {o:'RASTANURA',d:'HOUSTON',  flag:'SA'},
+    {o:'JEBELALI', d:'SINGAPORE',flag:'AE'},
+    {o:'SOHAR',    d:'NINGBO',   flag:'OM'},
+  );
+
+  lanes.forEach((ln, idx)=>{
+    const from = portById[ln.o], to = portById[ln.d];
+    if (!from || !to) return;
+    // short trail: from → CHOKE (for visibility at default framing)
+    const nearChoke = distDeg(from, CHOKE) < 10 || distDeg(to, CHOKE) < 10;
+    let trailEnd;
+    if (nearChoke) {
+      trailEnd = {lat: to.lat, lon: to.lon};
+    } else {
+      trailEnd = {lat: CHOKE.lat + (rnd()-0.5)*1.2, lon: CHOKE.lon + (rnd()-0.5)*1.6};
+    }
+
+    // Trail segment 1: origin → trailEnd (short visible trail)
+    const pts = greatCircleArc(from, trailEnd, 48, 0.004);
+    const color = flagById[ln.flag].color;
+    const tline = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(pts),
+      new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.9 })
+    );
+    GLOBE.trailGroup.add(tline);
+    GLOBE.trails.push(tline);
+
+    // Vessel sits near the end of the visible trail (simulating current position)
+    const pIdx = Math.floor(pts.length * (0.6 + rnd()*0.3));
+    const vesselPos = pts[Math.min(pIdx, pts.length-1)].clone();
+    const tri = makeVesselTriangle(color);
+    tri.position.copy(vesselPos);
+    // orient triangle so it lies tangent to sphere, pointing toward next point
+    orientTangent(tri, vesselPos, pts[Math.min(pIdx+1, pts.length-1)]);
+
+    const v = {
+      mesh: tri,
+      flag: ln.flag,
+      origin: ln.o,
+      dest: ln.d,
+      originName: from.name,
+      destName: to.name,
+      name: namesFor(ln.flag, rnd),
+      imo: '94'+Math.floor(10000+rnd()*90000),
+      dwt: Math.round(80 + rnd()*250)*1000,
+      speed: (8 + rnd()*8).toFixed(1),
+      cargo: rnd()>0.35?'Crude':(rnd()>0.5?'Products':'LNG'),
+      eta: `${Math.floor(1+rnd()*72)}h`,
+    };
+    tri.userData.vessel = v;
+    GLOBE.vesselGroup.add(tri);
+    GLOBE.vessels.push(v);
+  });
+
+  updateInfoPanel();
+}
+
+function distDeg(a,b){ const dx=a.lat-b.lat, dy=a.lon-b.lon; return Math.sqrt(dx*dx+dy*dy); }
+
+function makeVesselTriangle(colorHex){
+  // small triangle, 8-10 px — size it by world units at default cam distance
+  const s = 0.012;
+  const geo = new THREE.BufferGeometry();
+  const v = new Float32Array([
+    0,  s, 0,
+   -s*0.65, -s*0.7, 0,
+    s*0.65, -s*0.7, 0,
+  ]);
+  geo.setAttribute('position', new THREE.BufferAttribute(v, 3));
+  geo.setIndex([0,1,2]);
+  const mat = new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 0.98, side: THREE.DoubleSide, depthWrite: false, depthTest: true });
+  const m = new THREE.Mesh(geo, mat);
+  m.renderOrder = 10;
+  return m;
+}
+
+function orientTangent(mesh, pos, nextPos){
+  // align the triangle's plane to tangent plane at pos, pointing toward nextPos
+  const up = pos.clone().normalize();
+  const fwd = nextPos.clone().sub(pos).normalize();
+  // project fwd onto tangent plane
+  const fwdTan = fwd.sub(up.clone().multiplyScalar(fwd.dot(up))).normalize();
+  const right = new THREE.Vector3().crossVectors(up, fwdTan).normalize();
+  // Build matrix with columns: right(x), fwdTan(y=up-dir of triangle), up(z=normal)
+  const m = new THREE.Matrix4().makeBasis(right, fwdTan, up);
+  mesh.quaternion.setFromRotationMatrix(m);
+}
+
+const PFX = ['AL','FRONTIER','NORDIC','SEA','GULF','STAR','ORIENT','NITC','ADNOC','BAHRI','DESERT','PEARL'];
+const SFX = ['VOYAGER','PIONEER','SPIRIT','LEGACY','TRIUMPH','HORIZON','PRIDE','STAR','GLORY','EXPLORER'];
+function namesFor(flag, rnd){ return PFX[Math.floor(rnd()*PFX.length)] + ' ' + SFX[Math.floor(rnd()*SFX.length)]; }
+
+/* ---------- Camera orbit controls ---------- */
+function applyRotation(){
+  // worldRoot holds everything; rotate it
+  if (!worldRoot) return;
+  worldRoot.rotation.y = GLOBE.rot.y;
+  worldRoot.rotation.x = GLOBE.rot.x;
+}
+
+function bindGlobeInteractions(){
+  ensureWorldRoot();
+  applyRotation();
+
+  const canvas = GLOBE.canvas;
+  let down = false, lastX=0, lastY=0, downX=0, downY=0, movedFar=false;
+
+  canvas.addEventListener('mousedown', (e)=>{
+    down = true; movedFar = false; lastX=e.clientX; lastY=e.clientY; downX=e.clientX; downY=e.clientY;
+    GLOBE.rotVel.x = 0; GLOBE.rotVel.y = 0;
+    GLOBE.animTarget = null;
+    canvas.classList.add('grabbing');
+  });
+  window.addEventListener('mouseup', (e)=>{
+    if (!down) return;
+    down = false;
+    canvas.classList.remove('grabbing');
+    if (!movedFar){
+      // treat as click — raycast against vessels
+      handleClick(e);
+    }
+  });
+  window.addEventListener('mousemove', (e)=>{
+    if (down){
+      const dx = e.clientX - lastX;
+      const dy = e.clientY - lastY;
+      if (Math.abs(e.clientX-downX) > 4 || Math.abs(e.clientY-downY) > 4) movedFar = true;
+      const speed = 0.005 * (GLOBE.camDist/1.5);
+      GLOBE.rot.y += dx * speed;
+      GLOBE.rot.x += dy * speed;
+      GLOBE.rot.x = Math.max(-Math.PI/2+0.05, Math.min(Math.PI/2-0.05, GLOBE.rot.x));
+      GLOBE.rotVel.x = dy * speed * 0.6;
+      GLOBE.rotVel.y = dx * speed * 0.6;
+      lastX = e.clientX; lastY = e.clientY;
+      applyRotation();
+    }
+    // tooltip hover raycast
+    hoverRaycast(e);
+  });
+  canvas.addEventListener('wheel', (e)=>{
+    e.preventDefault();
+    const delta = e.deltaY * 0.0015;
+    GLOBE.camDistTarget = Math.max(1.15, Math.min(5.5, GLOBE.camDistTarget + delta));
+    GLOBE.animTarget = null;
+  }, { passive: false });
+}
+
+function handleClick(e){
+  const rect = GLOBE.canvas.getBoundingClientRect();
+  GLOBE.mouse.x = ((e.clientX - rect.left)/rect.width) * 2 - 1;
+  GLOBE.mouse.y = -((e.clientY - rect.top)/rect.height) * 2 + 1;
+  GLOBE.raycaster.setFromCamera(GLOBE.mouse, GLOBE.camera);
+  const hits = GLOBE.raycaster.intersectObjects(GLOBE.vesselGroup.children, false);
+  if (hits.length){
+    const v = hits[0].object.userData.vessel;
+    focusVesselArc(v);
+  } else {
+    // clicked empty: back to default framing and clear arc
+    clearArc();
+    animateTo(GLOBE.DEFAULT);
+  }
+}
+
+function hoverRaycast(e){
+  const rect = GLOBE.canvas.getBoundingClientRect();
+  GLOBE.mouse.x = ((e.clientX - rect.left)/rect.width) * 2 - 1;
+  GLOBE.mouse.y = -((e.clientY - rect.top)/rect.height) * 2 + 1;
+  GLOBE.raycaster.setFromCamera(GLOBE.mouse, GLOBE.camera);
+  const hits = GLOBE.raycaster.intersectObjects(GLOBE.vesselGroup.children, false);
+  if (hits.length){
+    showTip(e, hits[0].object.userData.vessel);
+    GLOBE.canvas.style.cursor = 'pointer';
+  } else {
+    hideTip();
+    GLOBE.canvas.style.cursor = '';
+  }
+}
+
+function focusVesselArc(v){
+  clearArc();
+  const from = portById[v.origin], to = portById[v.dest];
+  if (!from || !to) return;
+  // pull back camera, and rotate so the midpoint is front-center
+  const midLat = (from.lat + to.lat)/2;
+  const midLon = (from.lon + to.lon)/2;
+  animateTo({
+    rotX: -midLat * Math.PI/180,
+    rotY:  midLon * Math.PI/180,
+    dist: 3.2,
+  }, 1100);
+  // Draw arc
+  const pts = greatCircleArc(from, to, 96, Math.min(0.18, 0.04 + distDeg(from,to)/900));
+  const color = flagById[v.flag].color;
+  const line = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints(pts),
+    new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.95 })
+  );
+  // port dots
+  const dotGeo = new THREE.SphereGeometry(0.007, 12, 12);
+  const dotMat = new THREE.MeshBasicMaterial({ color });
+  const a = new THREE.Mesh(dotGeo, dotMat);
+  a.position.copy(latlonToVec3(from.lat, from.lon, GLOBE.radius*1.01));
+  const b = new THREE.Mesh(dotGeo, dotMat);
+  b.position.copy(latlonToVec3(to.lat,   to.lon,   GLOBE.radius*1.01));
+  GLOBE.arcGroup.add(line); GLOBE.arcGroup.add(a); GLOBE.arcGroup.add(b);
+}
+
+function clearArc(){
+  while (GLOBE.arcGroup.children.length) {
+    const c = GLOBE.arcGroup.children[0];
+    c.geometry && c.geometry.dispose();
+    GLOBE.arcGroup.remove(c);
+  }
+}
+
+function animateTo(target, dur=900){
+  GLOBE.animStart = { rotX: GLOBE.rot.x, rotY: GLOBE.rot.y, dist: GLOBE.camDist };
+  GLOBE.animTarget = Object.assign({}, GLOBE.animStart, target);
+  // normalize rotY wrap
+  const dy = GLOBE.animTarget.rotY - GLOBE.rot.y;
+  if (dy > Math.PI)  GLOBE.animTarget.rotY -= 2*Math.PI;
+  if (dy < -Math.PI) GLOBE.animTarget.rotY += 2*Math.PI;
+  GLOBE.animT0 = performance.now();
+  GLOBE.animDur = dur;
+  GLOBE.camDistTarget = GLOBE.animTarget.dist;
+}
+
+/* ---------- Reset view button ---------- */
+document.getElementById('reset-btn').addEventListener('click', ()=>{
+  clearArc();
+  animateTo(GLOBE.DEFAULT);
+});
+
+/* ---------- Hover tooltip (HTML overlay) ---------- */
+const tipEl = document.getElementById('vessel-tip');
+function showTip(e, v){
+  tipEl.innerHTML = `
+    <div class="name"><i class="sw" style="background:${cssVar('--flag-'+v.flag.toLowerCase())}"></i>${v.name}</div>
+    <div class="r"><span>IMO</span><span>${v.imo}</span></div>
+    <div class="r"><span>Flag</span><span>${v.flag}</span></div>
+    <div class="r"><span>Cargo</span><span>${v.cargo}</span></div>
+    <div class="r"><span>DWT</span><span>${(v.dwt/1000).toFixed(0)}k</span></div>
+    <div class="r"><span>Route</span><span>${v.originName.split(' ')[0]} → ${v.destName.split(' ')[0]}</span></div>
+    <div class="r"><span>SOG</span><span>${v.speed} kn</span></div>
+    <div class="hint">▸ Click to view arc</div>
+  `;
+  const stage = document.querySelector('.stage').getBoundingClientRect();
+  tipEl.style.left = (e.clientX - stage.left) + 'px';
+  tipEl.style.top = (e.clientY - stage.top) + 'px';
+  tipEl.classList.add('on');
+}
+function hideTip(){ tipEl.classList.remove('on'); }
+
+/* ---------- Animate loop ---------- */
+function animate(){
+  requestAnimationFrame(animate);
+
+  // Momentum
+  if (GLOBE.animTarget){
+    const t = Math.min(1, (performance.now() - GLOBE.animT0) / GLOBE.animDur);
+    const k = easeInOutCubic(t);
+    GLOBE.rot.x = GLOBE.animStart.rotX + (GLOBE.animTarget.rotX - GLOBE.animStart.rotX)*k;
+    GLOBE.rot.y = GLOBE.animStart.rotY + (GLOBE.animTarget.rotY - GLOBE.animStart.rotY)*k;
+    GLOBE.camDist = GLOBE.animStart.dist + (GLOBE.animTarget.dist - GLOBE.animStart.dist)*k;
+    if (t >= 1) GLOBE.animTarget = null;
+  } else {
+    // damp rotation momentum
+    GLOBE.rot.y += GLOBE.rotVel.y;
+    GLOBE.rot.x += GLOBE.rotVel.x;
+    GLOBE.rotVel.x *= 0.92;
+    GLOBE.rotVel.y *= 0.92;
+    if (Math.abs(GLOBE.rotVel.x) < 0.00005) GLOBE.rotVel.x = 0;
+    if (Math.abs(GLOBE.rotVel.y) < 0.00005) GLOBE.rotVel.y = 0;
+    GLOBE.rot.x = Math.max(-Math.PI/2+0.05, Math.min(Math.PI/2-0.05, GLOBE.rot.x));
+    // zoom lerp
+    GLOBE.camDist += (GLOBE.camDistTarget - GLOBE.camDist) * 0.12;
+  }
+  applyRotation();
+  GLOBE.camera.position.set(0,0,GLOBE.camDist);
+  GLOBE.camera.lookAt(0,0,0);
+  GLOBE.renderer.render(GLOBE.scene, GLOBE.camera);
+}
+function easeInOutCubic(t){ return t<0.5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2; }
+
+/* ---------- Info panel ---------- */
+function updateInfoPanel(){
+  const byFlag = {}; FLAGS.forEach(f=> byFlag[f.id]=0);
+  // count vessels in active date range (placeholder: all vessels)
+  const inRange = GLOBE.vessels;
+  inRange.forEach(v => byFlag[v.flag] = (byFlag[v.flag]||0)+1);
+  const total = inRange.length;
+  document.getElementById('k-active').textContent = total;
+  const max = Math.max(1, ...Object.values(byFlag));
+  const list = document.getElementById('flag-list');
+  list.innerHTML = '';
+  FLAGS.forEach(f=>{
+    const n = byFlag[f.id]||0;
+    const pct = total ? Math.round((n/total)*100) : 0;
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = `
+      <div class="l"><i class="sw" style="background:${cssVar(f.css)}"></i>${f.name}</div>
+      <div class="bar"><i style="background:${cssVar(f.css)}; width:${(n/max)*100}%"></i></div>
+      <div class="n">${n} · ${pct}%</div>
+    `;
+    list.appendChild(row);
+  });
+}
+
+/* ---------- Date range + chart (bound) ---------- */
+const RANGE = {
+  trackStart: new Date('2025-12-01'),
+  trackEnd:   new Date('2026-04-19'),
+  from: new Date('2026-01-01'),
+  to:   new Date('2026-04-19'),
+  today: new Date('2026-04-19'),
+  closure: new Date('2026-02-28'),
+};
+function fmtDate(d){ return d.toLocaleString('en-US',{month:'short',day:'2-digit',year:'numeric'}).toUpperCase().replace(',',''); }
+function daysBetween(a,b){ return Math.round((b - a)/(1000*60*60*24)); }
+
+/* Pre-compute dataset across the full track */
+const DATASET = (()=>{
+  const rnd = mulberry32(12345);
+  const total = daysBetween(RANGE.trackStart, RANGE.trackEnd);
+  const rows = [];
+  let b = 78;
+  for (let i=0;i<=total;i++){
+    const date = new Date(RANGE.trackStart); date.setDate(date.getDate()+i);
+    const closureIdx = daysBetween(RANGE.trackStart, RANGE.closure);
+    let base = 175 + Math.sin(i/10)*18 + (rnd()-0.5)*14;
+    if (i >= closureIdx) base = Math.max(60, base - 90 - (rnd()-0.5)*20);
+    const transits = Math.max(40, Math.round(base));
+    if (i < closureIdx) b += (rnd()-0.48)*1.2;
+    else b += (rnd()-0.3)*2.8;
+    b = Math.max(70, Math.min(125, b));
+    rows.push({ date, transits, brent: b });
+  }
+  return rows;
+})();
+
+function buildSlider(){
+  const ticks = document.getElementById('ticks');
+  ticks.innerHTML = '';
+  const total = daysBetween(RANGE.trackStart, RANGE.trackEnd);
+  for (let i=0; i<=total; i++){
+    const d = new Date(RANGE.trackStart); d.setDate(d.getDate()+i);
+    const pct = i/total;
+    if (d.getDate()===1){
+      const t = document.createElement('div'); t.className = 'tick month'; t.style.left = (pct*100)+'%'; ticks.appendChild(t);
+      const lbl = document.createElement('div'); lbl.className='tick-label'; lbl.style.left=(pct*100)+'%'; lbl.textContent=d.toLocaleString('en-US',{month:'short'}).toUpperCase(); ticks.appendChild(lbl);
+    } else if (i%5===0){
+      const t = document.createElement('div'); t.className='tick'; t.style.left=(pct*100)+'%'; ticks.appendChild(t);
+    }
+  }
+  const pc = daysBetween(RANGE.trackStart, RANGE.closure)/total;
+  document.getElementById('annot').style.left = (pc*100)+'%';
+  updateSliderPositions();
+}
+
+function updateSliderPositions(){
+  const total = daysBetween(RANGE.trackStart, RANGE.trackEnd);
+  const pf = daysBetween(RANGE.trackStart, RANGE.from)/total;
+  const pt = daysBetween(RANGE.trackStart, RANGE.to)/total;
+  document.getElementById('h-from').style.left = (pf*100)+'%';
+  document.getElementById('h-to').style.left   = (pt*100)+'%';
+  const sel = document.getElementById('sel');
+  sel.style.left = (pf*100)+'%';
+  sel.style.width = ((pt-pf)*100)+'%';
+  document.getElementById('r-from').textContent = fmtDate(RANGE.from);
+  document.getElementById('r-to').textContent   = fmtDate(RANGE.to);
+  document.getElementById('r-days').textContent = '· ' + daysBetween(RANGE.from, RANGE.to) + ' D';
+  document.getElementById('g-range').textContent =
+    RANGE.from.toLocaleString('en-US',{month:'short',day:'numeric'}) + ' → ' +
+    RANGE.to.toLocaleString('en-US',{month:'short',day:'numeric'});
+  buildChart();
+}
+
+function setupSliderDrag(){
+  const track = document.getElementById('slider');
+  let dragging = null;
+  const pctAt = cx => { const r = track.getBoundingClientRect(); return Math.max(0, Math.min(1, (cx-r.left)/r.width)); };
+  const pctToDate = p => { const total = daysBetween(RANGE.trackStart, RANGE.trackEnd); const d = new Date(RANGE.trackStart); d.setDate(d.getDate()+Math.round(p*total)); return d; };
+  ['h-from','h-to'].forEach(id => {
+    document.getElementById(id).addEventListener('mousedown', e => { dragging = id; e.preventDefault(); e.stopPropagation(); });
+  });
+  window.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const d = pctToDate(pctAt(e.clientX));
+    if (dragging==='h-from' && d < RANGE.to) RANGE.from = d;
+    if (dragging==='h-to'   && d > RANGE.from) RANGE.to = d;
+    updateSliderPositions();
+    document.querySelectorAll('.chips .chip').forEach(c=>c.classList.remove('active'));
+    document.querySelector('.chips .chip[data-chip="custom"]').classList.add('active');
+  });
+  window.addEventListener('mouseup', ()=> dragging=null);
+}
+
+function setupChips(){
+  document.querySelectorAll('.chips .chip').forEach(c=>{
+    c.addEventListener('click', ()=>{
+      document.querySelectorAll('.chips .chip').forEach(x=>x.classList.remove('active'));
+      c.classList.add('active');
+      const v = c.dataset.chip;
+      const today = RANGE.today;
+      if (v === '7')   { const f = new Date(today); f.setDate(f.getDate()-7);  RANGE.from = f; RANGE.to = today; }
+      else if (v==='30'){ const f = new Date(today); f.setDate(f.getDate()-30); RANGE.from = f; RANGE.to = today; }
+      else if (v==='ytd'){ RANGE.from = new Date('2026-01-01'); RANGE.to = today; }
+      // custom: leave as-is
+      updateSliderPositions();
+    });
+  });
+}
+
+function buildChart(){
+  const body = document.getElementById('chart-body');
+  body.innerHTML = '';
+  const W = body.clientWidth || 560, H = body.clientHeight || 200;
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNS,'svg');
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`); svg.setAttribute('preserveAspectRatio','none');
+  const pad = { l: 36, r: 42, t: 14, b: 22 };
+  const plotW = W - pad.l - pad.r;
+  const plotH = H - pad.t - pad.b;
+
+  // Filter dataset to current range
+  const inRange = DATASET.filter(r => r.date >= RANGE.from && r.date <= RANGE.to);
+  if (!inRange.length) { body.appendChild(svg); return; }
+
+  const tMax = Math.max(...inRange.map(r=>r.transits)) * 1.1;
+  const bVals = inRange.map(r=>r.brent);
+  const bMin = Math.min(...bVals) - 2, bMax = Math.max(...bVals) + 2;
+  const N = inRange.length;
+  const xAt = i => pad.l + (N>1 ? (i/(N-1))*plotW : plotW/2);
+  const yT = v => pad.t + plotH - (v/tMax)*plotH;
+  const yB = v => pad.t + plotH - ((v-bMin)/(bMax-bMin))*plotH;
+
+  // gridlines
+  for (let i=0; i<5; i++){
+    const y = pad.t + (plotH/4)*i;
+    const l = document.createElementNS(svgNS,'line');
+    l.setAttribute('x1',pad.l); l.setAttribute('x2',W-pad.r);
+    l.setAttribute('y1',y); l.setAttribute('y2',y);
+    l.setAttribute('stroke','rgba(255,255,255,0.04)'); l.setAttribute('stroke-width','0.5');
+    svg.appendChild(l);
+  }
+
+  // X ticks: show month starts that fall within range
+  const months = [];
+  let cur = new Date(RANGE.from.getFullYear(), RANGE.from.getMonth(), 1);
+  if (cur < RANGE.from) cur.setMonth(cur.getMonth()+1);
+  while (cur <= RANGE.to) { months.push(new Date(cur)); cur.setMonth(cur.getMonth()+1); }
+  months.forEach(mDate => {
+    const idx = inRange.findIndex(r => r.date >= mDate);
+    if (idx < 0) return;
+    const x = xAt(idx);
+    const t = document.createElementNS(svgNS,'text');
+    t.setAttribute('x', x); t.setAttribute('y', H-6);
+    t.setAttribute('fill','rgba(255,255,255,0.3)');
+    t.setAttribute('font-family','var(--mono)'); t.setAttribute('font-size','9');
+    t.setAttribute('letter-spacing','0.1em'); t.setAttribute('text-anchor','middle');
+    t.textContent = mDate.toLocaleString('en-US',{month:'short'}).toUpperCase();
+    svg.appendChild(t);
+  });
+
+  // Y labels
+  for (let i=0; i<=4; i++){
+    const y = pad.t + (plotH/4)*i;
+    const vT = Math.round(tMax*(1 - i/4));
+    const vB = (bMax - (bMax-bMin)*(i/4)).toFixed(0);
+    const lT = document.createElementNS(svgNS,'text');
+    lT.setAttribute('x', pad.l-6); lT.setAttribute('y', y+3);
+    lT.setAttribute('text-anchor','end'); lT.setAttribute('fill', cssVar('--accent'));
+    lT.setAttribute('font-size','9'); lT.setAttribute('font-family','var(--mono)');
+    lT.setAttribute('opacity','0.7'); lT.textContent = vT;
+    svg.appendChild(lT);
+    const lB = document.createElementNS(svgNS,'text');
+    lB.setAttribute('x', W-pad.r+6); lB.setAttribute('y', y+3);
+    lB.setAttribute('text-anchor','start'); lB.setAttribute('fill', cssVar('--ok'));
+    lB.setAttribute('font-size','9'); lB.setAttribute('font-family','var(--mono)');
+    lB.setAttribute('opacity','0.7'); lB.textContent = '$'+vB;
+    svg.appendChild(lB);
+  }
+
+  // bars
+  const closureIdxInRange = inRange.findIndex(r => r.date >= RANGE.closure);
+  inRange.forEach((r,i)=>{
+    const x = xAt(i), y = yT(r.transits);
+    const rect = document.createElementNS(svgNS,'rect');
+    const w = Math.max(1, plotW/Math.max(1,N) - 1);
+    rect.setAttribute('x', x - w/2); rect.setAttribute('y', y);
+    rect.setAttribute('width', w); rect.setAttribute('height', pad.t+plotH - y);
+    const post = closureIdxInRange >= 0 && i >= closureIdxInRange;
+    rect.setAttribute('fill', post ? cssVar('--bad') : cssVar('--accent'));
+    rect.setAttribute('opacity', post ? '0.55' : '0.75');
+    svg.appendChild(rect);
+  });
+
+  // brent line
+  let d = '';
+  inRange.forEach((r,i)=>{ d += (i===0?'M ':'L ') + xAt(i).toFixed(1)+' '+yB(r.brent).toFixed(1)+' '; });
+  const line = document.createElementNS(svgNS,'path');
+  line.setAttribute('d', d); line.setAttribute('fill','none');
+  line.setAttribute('stroke', cssVar('--ok')); line.setAttribute('stroke-width','1.4');
+  svg.appendChild(line);
+
+  // closure annotation if in range
+  if (RANGE.closure >= RANGE.from && RANGE.closure <= RANGE.to){
+    const idx = inRange.findIndex(r => r.date >= RANGE.closure);
+    if (idx >= 0){
+      const x = xAt(idx);
+      const l = document.createElementNS(svgNS,'line');
+      l.setAttribute('x1',x); l.setAttribute('x2',x);
+      l.setAttribute('y1',pad.t); l.setAttribute('y2',pad.t+plotH);
+      l.setAttribute('stroke', cssVar('--bad')); l.setAttribute('stroke-dasharray','2 3');
+      l.setAttribute('stroke-width','1');
+      svg.appendChild(l);
+      const t = document.createElementNS(svgNS,'text');
+      t.setAttribute('x', x+5); t.setAttribute('y', pad.t+10);
+      t.setAttribute('fill', cssVar('--bad')); t.setAttribute('font-size','9');
+      t.setAttribute('font-family','var(--mono)'); t.setAttribute('letter-spacing','0.08em');
+      t.textContent = '28 FEB · CLOSURE';
+      svg.appendChild(t);
+    }
+  }
+  body.appendChild(svg);
+}
+
+/* ---------- Drawer ---------- */
+document.getElementById('chat-fab').addEventListener('click', ()=>{ document.getElementById('drawer').classList.add('open'); });
+document.getElementById('drawer-close').addEventListener('click', ()=>{ document.getElementById('drawer').classList.remove('open'); });
+document.querySelector('.compose .send').addEventListener('click', submitChat);
+document.querySelector('.compose input').addEventListener('keydown', e => { if (e.key === 'Enter') submitChat(); });
+document.querySelectorAll('.compose .sugs button').forEach(b=>{ b.addEventListener('click', ()=>{ document.querySelector('.compose input').value = b.textContent; }); });
+function submitChat(){
+  const input = document.querySelector('.compose input');
+  const v = input.value.trim(); if (!v) return;
+  const msgs = document.getElementById('msgs');
+  const u = document.createElement('div'); u.className='msg user';
+  u.innerHTML = `<div class="who">analyst</div><div class="body">${v}</div>`;
+  msgs.appendChild(u);
+  const a = document.createElement('div'); a.className='msg asst';
+  const saN = GLOBE.vessels.filter(x=>x.flag==='SA').length;
+  const irN = GLOBE.vessels.filter(x=>x.flag==='IR').length;
+  const aeN = GLOBE.vessels.filter(x=>x.flag==='AE').length;
+  a.innerHTML = `<div class="who">hormuz-gpt</div><div class="body">
+    <i>[grounded on ${document.getElementById('g-range').textContent}]</i>
+    Within the selected window, <b>${GLOBE.vessels.length}</b> vessels matched.
+    <span class="num">${saN}</span> SA, <span class="num">${irN}</span> IR, <span class="num">${aeN}</span> AE.
+    <div class="cites"><a>AIS · live</a><a>Kpler</a><a>EIA · STEO</a></div>
+  </div>`;
+  msgs.appendChild(a);
+  input.value = '';
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+/* ---------- Chart collapse ---------- */
+document.getElementById('chart-bar').addEventListener('click', ()=>{
+  const p = document.getElementById('chart-panel');
+  p.classList.toggle('collapsed');
+  document.getElementById('chart-caret').textContent = p.classList.contains('collapsed') ? '▴ EXPAND' : '▾ COLLAPSE';
+  if (!p.classList.contains('collapsed')) setTimeout(buildChart, 260);
+});
+
+/* ---------- UTC clock ---------- */
+function tickClock(){
+  const d = new Date();
+  document.getElementById('t-utc').textContent = d.toISOString().slice(11,19) + 'Z';
+}
+
+/* ---------- Bootstrap ---------- */
+buildSlider();
+setupSliderDrag();
+setupChips();
+buildChart();
+tickClock(); setInterval(tickClock, 1000);
+initGlobe();
+document.documentElement.style.setProperty('--accent', 'oklch(0.78 0.14 39)');
+// trail opacity applied after init
+setTimeout(()=>{
+  if (GLOBE.trailGroup) GLOBE.trailGroup.traverse(ch=>{ if (ch.material && ch.material.transparent !== undefined){ ch.material.transparent = true; ch.material.opacity = 0.49; }});
+}, 900);
+
+
+</script>
+</body>
+</html>
