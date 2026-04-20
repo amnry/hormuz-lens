@@ -1,4 +1,4 @@
-import { ScatterplotLayer, ArcLayer } from '@deck.gl/layers';
+import { IconLayer, ArcLayer } from '@deck.gl/layers';
 import { TripsLayer } from '@deck.gl/geo-layers';
 import type { PositionRow } from '../../lib/db/queries';
 
@@ -12,7 +12,15 @@ function flagColor(flag: string | null, map: FlagColorMap): RGB {
   return map[flag] ?? map['OT'] ?? FALLBACK_COLOR;
 }
 
-// ── Scatter layer: historical GFW daily centroids ─────────────────────────────
+// 64×64 white upward-pointing triangle; mask:true lets getColor tint it per vessel
+const TRIANGLE_ATLAS =
+  'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCI+PHBvbHlnb24gcG9pbnRzPSIzMiwyIDYyLDYyIDIsNjIiIGZpbGw9IndoaXRlIi8+PC9zdmc+';
+
+const ICON_MAPPING = {
+  triangle: { x: 0, y: 0, width: 64, height: 64, anchorY: 32, mask: true },
+} as const;
+
+// ── Icon layer: historical GFW daily centroids ────────────────────────────────
 
 export interface ScatterPoint {
   mmsi: string;
@@ -29,17 +37,19 @@ export function makeScatterLayer(
   onHover: (info: { object?: ScatterPoint; x: number; y: number } | null) => void,
   onClick: (info: { object?: ScatterPoint }) => void,
 ) {
-  return new ScatterplotLayer<ScatterPoint>({
+  return new IconLayer<ScatterPoint>({
     id: 'gfw-centroids',
     data: points,
+    iconAtlas: TRIANGLE_ATLAS,
+    iconMapping: ICON_MAPPING,
+    getIcon: () => 'triangle',
     getPosition: (d) => [d.lon, d.lat],
-    getRadius: 8000,
-    radiusUnits: 'meters',
-    getFillColor: (d) => [...flagColor(d.flag_iso2, colorMap), 178] as [number, number, number, number],
+    getSize: 10,
+    getColor: (d) => [...flagColor(d.flag_iso2, colorMap), 210] as [number, number, number, number],
     pickable: true,
     onHover,
     onClick,
-    updateTriggers: { getFillColor: [colorMap] },
+    updateTriggers: { getColor: [colorMap] },
   });
 }
 

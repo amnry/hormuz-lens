@@ -1,18 +1,25 @@
 import type { KpiSnapshot, FlagMixRow } from '../lib/db/queries';
-import { GULF_FLAGS_UI } from '../lib/util/flags';
+import countries from 'i18n-iso-countries';
+import enLocale from 'i18n-iso-countries/langs/en.json';
+
+countries.registerLocale(enLocale);
+
+const DISPLAY_OVERRIDES: Record<string, string> = {
+  'United Arab Emirates':    'UAE',
+  'Marshall Islands':        'Marshall Is.',
+  'Islamic Republic of Iran': 'Iran',
+};
+
+function flagName(iso2: string): string {
+  if (iso2 === 'OT') return 'Other';
+  const full = countries.getName(iso2, 'en') ?? iso2;
+  return DISPLAY_OVERRIDES[full] ?? full;
+}
 
 interface Props {
   kpi: KpiSnapshot;
   flagMix: FlagMixRow[];
 }
-
-const FLAG_NAMES: Record<string, string> = {
-  SA: 'Saudi Arabia', IR: 'Iran',   AE: 'UAE',   QA: 'Qatar',
-  KW: 'Kuwait',       IQ: 'Iraq',   OM: 'Oman',  OT: 'Other',
-};
-
-// Ordered display: Gulf states first in GULF_FLAGS_UI order, then OT
-const DISPLAY_ORDER = [...GULF_FLAGS_UI, 'OT'] as string[];
 
 function Delta({ value }: { value: number | null }) {
   if (value === null) return <span style={{ color: 'var(--ink-faint)' }}>—</span>;
@@ -25,8 +32,7 @@ function Delta({ value }: { value: number | null }) {
 }
 
 export default function InfoPanel({ kpi, flagMix }: Props) {
-  const flagMap = new Map(flagMix.map((r) => [r.flag_iso2, r]));
-  const maxCount = Math.max(...flagMix.map((r) => r.count), 1);
+  const maxCount = Math.max(1, ...flagMix.filter((r) => r.flag_iso2 !== 'OT').map((r) => r.count));
 
   const closureLabel =
     kpi.closure_status === 'PARTIAL'  ? 'PARTIAL · since 28 Feb' :
@@ -147,11 +153,10 @@ export default function InfoPanel({ kpi, flagMix }: Props) {
         {flagMix.length === 0 ? (
           <div style={{ color: 'var(--ink-faint)', fontSize: '10px' }}>No data</div>
         ) : (
-          DISPLAY_ORDER
-            .filter((f) => flagMap.has(f))
-            .map((flag) => {
-              const row = flagMap.get(flag)!;
-              const barWidth = Math.round((row.count / maxCount) * 58);
+          [...flagMix.filter((r) => r.flag_iso2 !== 'OT'),
+            ...flagMix.filter((r) => r.flag_iso2 === 'OT')]
+            .map(({ flag_iso2: flag, count, share }) => {
+              const barWidth = Math.round((count / maxCount) * 58);
               return (
                 <div
                   key={flag}
@@ -169,12 +174,12 @@ export default function InfoPanel({ kpi, flagMix }: Props) {
                       style={{
                         width: '8px',
                         height: '8px',
-                        background: `var(--flag-${flag.toLowerCase()})`,
+                        background: `var(--flag-${flag.toLowerCase()}, var(--flag-ot))`,
                         display: 'inline-block',
                         flexShrink: 0,
                       }}
                     />
-                    {FLAG_NAMES[flag] ?? flag}
+                    {flagName(flag)}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center' }}>
                     <div
@@ -194,13 +199,13 @@ export default function InfoPanel({ kpi, flagMix }: Props) {
                           top: 0,
                           bottom: 0,
                           width: `${barWidth}px`,
-                          background: `var(--flag-${flag.toLowerCase()})`,
+                          background: `var(--flag-${flag.toLowerCase()}, var(--flag-ot))`,
                           display: 'block',
                         }}
                       />
                     </div>
                     <span style={{ color: 'var(--ink)', fontVariantNumeric: 'tabular-nums', minWidth: '28px', textAlign: 'right' }}>
-                      {row.count}
+                      {count}
                     </span>
                   </div>
                 </div>

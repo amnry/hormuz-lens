@@ -2,7 +2,6 @@ import 'server-only';
 import { z } from 'zod/v4';
 import { getServiceClient } from './service-client';
 import { toIsoDate, subtractDays, todayUtc } from '../util/date-range';
-import { GULF_FLAGS_UI } from '../util/flags';
 
 const db = () => getServiceClient();
 
@@ -95,21 +94,9 @@ export async function getBrentSeries(from: Date, to: Date): Promise<BrentRow[]> 
   return z.array(BrentRow).parse(data ?? []);
 }
 
+// Top 5 flags by transit count in the range, plus 'OT' aggregating the rest.
+// Implemented in JS against flag_mix_daily to avoid requiring a DB migration.
 export async function getFlagMixForRange(from: Date, to: Date): Promise<FlagMixRow[]> {
-  // Fetches flag_mix_daily rows and collapses non-Gulf flags into 'OT' in JS.
-  //
-  // The SQL equivalent would use:
-  //   CASE WHEN flag IN (...gulf list...) THEN flag ELSE 'OT' END AS flag_iso2,
-  //   SUM(count) AS count,
-  //   SUM(SUM(count)) OVER () as grand_total   -- window on top of aggregate
-  // with HAVING SUM(count) > 0 to drop zero-transit artifact rows.
-  //
-  // Implemented in JS to avoid requiring a DB migration for the RPC function.
-  return getFlagMixFallback(from, to);
-}
-
-// Fetches flag_mix_daily rows and aggregates in JS.
-async function getFlagMixFallback(from: Date, to: Date): Promise<FlagMixRow[]> {
   const { data, error } = await db()
     .from('flag_mix_daily')
     .select('flag, count')
@@ -118,24 +105,27 @@ async function getFlagMixFallback(from: Date, to: Date): Promise<FlagMixRow[]> {
 
   if (error) throw new Error(error.message);
 
-  const gulfSet = new Set<string>(GULF_FLAGS_UI);
   const totals: Record<string, number> = {};
   for (const row of data ?? []) {
-    const bucket = gulfSet.has(row.flag) ? row.flag : 'OT';
-    totals[bucket] = (totals[bucket] ?? 0) + row.count;
+    totals[row.flag] = (totals[row.flag] ?? 0) + row.count;
   }
 
-  const grand = Object.values(totals).reduce((a, b) => a + b, 0);
+  const sorted = Object.entries(totals)
+    .filter(([, c]) => c > 0)
+    .sort(([, a], [, b]) => b - a);
+
+  const top5  = sorted.slice(0, 5);
+  const otSum = sorted.slice(5).reduce((s, [, c]) => s + c, 0);
+  const rows: [string, number][] = otSum > 0 ? [...top5, ['OT', otSum]] : top5;
+
+  const grand = rows.reduce((s, [, c]) => s + c, 0);
   if (grand === 0) return [];
 
-  return Object.entries(totals)
-    .filter(([, count]) => count > 0)
-    .sort(([, a], [, b]) => b - a)
-    .map(([flag_iso2, count]) => ({
-      flag_iso2,
-      count,
-      share: count / grand,
-    }));
+  return rows.map(([flag_iso2, count]) => ({
+    flag_iso2,
+    count,
+    share: count / grand,
+  }));
 }
 
 export async function getHistoricalPositions(
