@@ -17,7 +17,7 @@ Supabase `pg_cron` runs six rollups:
 - `daily_transits` — one row per vessel per day with `entered_choke_at`, `exited_choke_at`, `flag`, `cargo_class`, `dwt`.
 - `flag_mix_daily` — flag-state vessel counts and share per day.
 - `throughput_mbd_daily` — estimated crude throughput in Mb/d, joining DWT × cargo class × known load factors.
-- `correlations_30d` — rolling Pearson correlation between daily transits and Brent close (EIA STEO feed, pulled by a second cron job).
+- `correlations_30d` — rolling Pearson correlation between daily transits and Brent close (FRED API series `DCOILBRENTEU`, pulled by a second cron job).
 - `data_quality_daily` — AIS reliability tracking: per-day counts of dark vessels (gap > 6 h), suspected spoofers (stationary MMSI with moving position), and AIS receiver coverage gaps over the bounding box.
 - `events` — append-only table of named regime changes pinned to a date, seeded with the Feb 28 2025 entry (`{date: 2025-02-28, label: "Regime change", notes: "..."}`). Used by the chart layer to render threshold lines and by the agent to anchor pre/post comparisons.
 
