@@ -40,3 +40,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# supabase cli state
+supabase/.temp/
+
+# ingestion runtime state
+.backfill-cursor.json
+.vessel-identity-cache.json
