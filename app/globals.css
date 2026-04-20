@@ -216,3 +216,25 @@
     @apply font-sans;
   }
 }
+
+/* ── hormuz.lens app shell ── */
+/* Wire next/font variables into the design-token font references */
+:root {
+  --mono: var(--font-ibm-plex-mono), ui-monospace, Menlo, monospace;
+  --sans: var(--font-inter), system-ui, sans-serif;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 12px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom scrollbar to match mockup */
+::-webkit-scrollbar       { width: 6px; }
+::-webkit-scrollbar-thumb { background: var(--line); }
+::-webkit-scrollbar-track { background: transparent; }
