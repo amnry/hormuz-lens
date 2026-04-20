@@ -6,7 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest",
+    "db:types": "npx supabase gen types typescript --project-id mqgllhvxrxaluqqhldub > lib/db/types.ts",
+    "ingest:dev": "tsx ingestion/ais-ingest.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.0",
