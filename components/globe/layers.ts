@@ -35,7 +35,6 @@ export function makeScatterLayer(
   points: ScatterPoint[],
   colorMap: FlagColorMap,
   onHover: (info: { object?: ScatterPoint; x: number; y: number } | null) => void,
-  onClick: (info: { object?: ScatterPoint }) => void,
 ) {
   return new IconLayer<ScatterPoint>({
     id: 'gfw-centroids',
@@ -48,7 +47,6 @@ export function makeScatterLayer(
     getColor: (d) => [...flagColor(d.flag_iso2, colorMap), 210] as [number, number, number, number],
     pickable: true,
     onHover,
-    onClick,
     updateTriggers: { getColor: [colorMap] },
   });
 }

@@ -5,8 +5,8 @@ import { _GlobeView as GlobeView } from '@deck.gl/core';
 import { Map } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { buildFlagColorMap } from '../../lib/util/colors';
-import { makeScatterLayer, makeTripsLayer, makeArcLayer } from './layers';
-import type { ScatterPoint, ArcDatum } from './layers';
+import { makeScatterLayer, makeTripsLayer } from './layers';
+import type { ScatterPoint } from './layers';
 import type { PositionRow } from '../../lib/db/queries';
 
 const BASEMAP_STYLE = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
@@ -32,7 +32,6 @@ interface Props {
 export default function Globe({ positions }: Props) {
   const [viewState, setViewState] = useState(INITIAL_VIEW_STATE);
   const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null);
-  const [arcData, setArcData] = useState<ArcDatum[]>([]);
   const colorMapRef = useRef<Record<string, [number, number, number]>>({});
 
   useEffect(() => {
@@ -59,22 +58,9 @@ export default function Globe({ positions }: Props) {
     [],
   );
 
-  const handleClick = useCallback((info: { object?: ScatterPoint }) => {
-    if (!info.object) {
-      setArcData([]);
-      return;
-    }
-    setArcData([{
-      sourcePosition: [56.3, 26.5],
-      targetPosition: [info.object.lon, info.object.lat],
-      flag_iso2: info.object.flag_iso2,
-    }]);
-  }, []);
-
   const layers = [
-    makeScatterLayer(scatterPoints, colorMapRef.current, handleHover, handleClick),
+    makeScatterLayer(scatterPoints, colorMapRef.current, handleHover),
     makeTripsLayer([], colorMapRef.current, 0),
-    makeArcLayer(arcData, colorMapRef.current, arcData.length > 0),
   ];
 
   return (
@@ -137,13 +123,6 @@ export default function Globe({ positions }: Props) {
               <span style={{ fontVariantNumeric: 'tabular-nums' }}>{value}</span>
             </div>
           ))}
-          <div style={{
-            color: 'var(--ink-faint)', fontSize: '9.5px', marginTop: '5px',
-            letterSpacing: '0.08em', textTransform: 'uppercase',
-            borderTop: '1px dashed var(--line-soft)', paddingTop: '5px',
-          }}>
-            Click to show transit arc
-          </div>
         </div>
       )}
     </div>
