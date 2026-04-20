@@ -8,7 +8,7 @@ A long-running Supabase Edge Function holds an authenticated WebSocket to `wss:/
 
 ## 1b. Backfill — Global Fishing Watch API
 
-AISStream has no historical API; the live WebSocket only covers from the moment of first connection. Jan 1 2025 through Feb 27 2025 is backfilled from the Global Fishing Watch Vessels API (`https://globalfishingwatch.org/our-apis/`). GFW provides free API tokens, strong global coverage including the Gulf, and includes cargo and tanker vessel tracks under an Apache-2.0-compatible data license. The backfill job (a one-shot Supabase Edge Function) pages through the GFW tracks endpoint filtered to the same bounding box, normalises records to the same `{mmsi, imo, flag, lat, lon, sog, cog, draft, ts}` shape as live data, and bulk-inserts into `ais_positions` with a `source: 'gfw'` column for provenance. Live rows carry `source: 'aisstream'`. All downstream views and the agent treat both sources uniformly.
+AISStream has no historical API; the live WebSocket only covers from the moment of first connection. Jan 1 2025 through Feb 27 2025 is backfilled from the Global Fishing Watch Vessels API (`https://globalfishingwatch.org/our-apis/`). GFW provides free API tokens, strong global coverage including the Gulf, and includes cargo and tanker vessel tracks under an Apache-2.0-compatible data license. The backfill job (a one-shot Supabase Edge Function) pages through the GFW tracks endpoint filtered to the same bounding box, normalises records to the same `{mmsi, imo, flag, lat, lon, sog, cog, draft, ts}` shape as live data, and bulk-inserts into `ais_positions` with a `source: 'gfw'` column for provenance. Live rows carry `source: 'ais_live'`. All downstream views and the agent treat both sources uniformly.
 
 ## 2. Aggregation — scheduled materialized views
 
@@ -19,7 +19,7 @@ Supabase `pg_cron` runs six rollups:
 - `throughput_mbd_daily` — estimated crude throughput in Mb/d, joining DWT × cargo class × known load factors.
 - `correlations_30d` — rolling Pearson correlation between daily transits and Brent close (FRED API series `DCOILBRENTEU`, pulled by a second cron job).
 - `data_quality_daily` — AIS reliability tracking: per-day counts of dark vessels (gap > 6 h), suspected spoofers (stationary MMSI with moving position), and AIS receiver coverage gaps over the bounding box.
-- `events` — append-only table of named regime changes pinned to a date, seeded with the Feb 28 2025 entry (`{date: 2025-02-28, label: "Regime change", notes: "..."}`). Used by the chart layer to render threshold lines and by the agent to anchor pre/post comparisons.
+- `events` — append-only table of named regime changes pinned to a date, seeded with the Feb 28 2026 entry (`{date: 2026-02-28, label: "Regime change", notes: "..."}`). Used by the chart layer to render threshold lines and by the agent to anchor pre/post comparisons.
 
 Views refresh every 15 minutes; Brent series refreshes daily at 00:10 UTC.
 
