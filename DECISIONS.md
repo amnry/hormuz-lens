@@ -20,6 +20,8 @@ Chose Supabase over a Neon Postgres + SST (Serverless Stack) combination. Supaba
 
 Chose OpenRouter as the LLM gateway over calling the Anthropic API directly. OpenRouter exposes a unified schema across Claude, GPT, Gemini, and open-weights models with automatic fallback on rate limits or outages, which both demonstrates cost awareness to reviewers and lets us route cheap tool-call turns to free-tier models while reserving the expensive model for the final synthesis step.
 
+**Amendment (2026-04-20):** Free-tier OpenRouter models are unreliable for agent orchestration. Two concrete failure modes encountered during Phase 5: (1) `google/gemini-2.0-flash-exp:free` returned 404 (model discontinued without notice); (2) `meta-llama/llama-3.3-70b-instruct:free` returned 400 because the Venice provider enforces a 16384-token cap that conflicts with LangChain's default max_tokens parameter. Additionally, OpenRouter pre-reserves `input_tokens + max_completion` against the key's monthly credit limit on every request -- free models with large context windows (64k) can exhaust a key's budget even at low traffic. We replaced the free-tier primary with `anthropic/claude-haiku-4-5` (paid, ~$0.80/MTok input) and capped `maxTokens: 4096` on both primary and fallback to bound per-request reservation.
+
 ## 005. LangGraph over a raw agent loop
 
 Chose LangGraph's `StateGraph` over a hand-rolled `while (not done) { call_model; run_tools }` loop. An explicit graph with typed state, named nodes, and declared edges is straightforward to snapshot, replay, and evaluate with LangSmith, whereas a raw loop hides control flow inside closures and makes it painful to test tool-selection behaviour in isolation.

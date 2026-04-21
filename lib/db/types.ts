@@ -246,7 +246,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      match_docs: {
+        Args: { match_count?: number; query_embedding: string }
+        Returns: {
+          chunk: string
+          metadata: Json
+          score: number
+        }[]
+      }
     }
     Enums: {
       ais_source: "ais_live" | "gfw" | "backfill"
