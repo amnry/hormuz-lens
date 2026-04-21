@@ -35,7 +35,7 @@ The globe is a deck.gl `Deck` instance with a `GlobeView`. Layers: `GeoJsonLayer
 
 The `/api/chat` route hands the user turn to a LangGraph `StateGraph` with three tools:
 
-- `vector_search_docs` — pgvector similarity search over ingested EIA and Kpler methodology notes.
+- `vector_search_docs` — pgvector similarity search over ARCHITECTURE.md, DECISIONS.md, and DIFFERENTIATION.md; grounds answers about dataset methodology, design decisions, and project scope.
 - `sql_query_aggregates` — read-only SQL against the materialized views, schema-constrained.
 - `compute_correlation` — returns the rolling 7-day Pearson correlation between daily transits and Brent close, plus the pre-Feb-28 and post-Feb-28 split means for both series. Computed in-process from `correlations_30d` and `events`; not a raw SQL passthrough.
 
