@@ -13,7 +13,8 @@
     "ingest:brent": "tsx ingestion/brent.ts",
     "ingest:backfill": "tsx ingestion/backfill.ts",
     "ingest:live": "tsx ingestion/ais_live.ts",
-    "ingest:dev": "tsx ingestion/ais_live.ts"
+    "ingest:dev": "tsx ingestion/ais_live.ts",
+    "embed:docs": "tsx scripts/embed_docs.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.0",
