@@ -112,16 +112,16 @@ export default function ChatDrawer({ range }: Props) {
       {/* Drawer */}
       <div style={{
         position:      'absolute',
-        top:           0,
-        right:         0,
-        height:        '100%',
+        top:           '344px',
+        right:         '16px',
+        height:        'calc(100% - 344px)',
         width:         '380px',
         background:    'var(--bg-2)',
-        borderLeft:    '1px solid var(--line)',
+        border:        '1px solid var(--line)',
         zIndex:        30,
         display:       'flex',
         flexDirection: 'column',
-        transform:     open ? 'translateX(0)' : 'translateX(100%)',
+        transform:     open ? 'translateX(0)' : 'translateX(110%)',
         transition:    'transform .26s ease',
       }}>
 
